@@ -1,0 +1,1307 @@
+// server.js
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const path = require('path');
+require('dotenv').config();
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static('uploads'));
+
+// MongoDB Connection
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/calorie_tracker', {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+});
+
+// User Schema
+const userSchema = new mongoose.Schema({
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    name: { type: String, default: '' },
+    settings: {
+        theme: { type: String, default: 'system' },
+        caloriePrecision: { type: Number, default: 0 },
+        nutrientPrecision: { type: Number, default: 1 }
+    },
+    goals: {
+        calories: { type: Number, default: 2000 },
+        protein: { type: Number, default: 80 },
+        carbs: { type: Number, default: 250 },
+        fat: { type: Number, default: 65 },
+        water: { type: Number, default: 2.5 }
+    },
+    createdAt: { type: Date, default: Date.now },
+    lastLogin: { type: Date, default: Date.now }
+});
+
+// Food Database Schema
+const foodSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    calories: { type: Number, required: true },
+    protein: { type: Number, default: 0 },
+    carbs: { type: Number, default: 0 },
+    fat: { type: Number, default: 0 },
+    fiber: { type: Number, default: 0 },
+    category: { type: String, default: 'other' },
+    isPublic: { type: Boolean, default: false },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    createdAt: { type: Date, default: Date.now }
+});
+
+// Daily Log Schema
+const dailyLogSchema = new mongoose.Schema({
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    date: { type: String, required: true }, // YYYY-MM-DD format
+    meals: {
+        breakfast: [{
+            name: String,
+            amount: Number,
+            calories: Number,
+            protein: Number,
+            carbs: Number,
+            fat: Number,
+            fiber: Number,
+            timestamp: { type: Date, default: Date.now }
+        }],
+        lunch: [{
+            name: String,
+            amount: Number,
+            calories: Number,
+            protein: Number,
+            carbs: Number,
+            fat: Number,
+            fiber: Number,
+            timestamp: { type: Date, default: Date.now }
+        }],
+        dinner: [{
+            name: String,
+            amount: Number,
+            calories: Number,
+            protein: Number,
+            carbs: Number,
+            fat: Number,
+            fiber: Number,
+            timestamp: { type: Date, default: Date.now }
+        }],
+        snack: [{
+            name: String,
+            amount: Number,
+            calories: Number,
+            protein: Number,
+            carbs: Number,
+            fat: Number,
+            fiber: Number,
+            timestamp: { type: Date, default: Date.now }
+        }]
+    },
+    totals: {
+        calories: { type: Number, default: 0 },
+        protein: { type: Number, default: 0 },
+        carbs: { type: Number, default: 0 },
+        fat: { type: Number, default: 0 },
+        fiber: { type: Number, default: 0 },
+        water: { type: Number, default: 0 }
+    },
+    updatedAt: { type: Date, default: Date.now }
+});
+
+// Models
+const User = mongoose.model('User', userSchema);
+const Food = mongoose.model('Food', foodSchema);
+const DailyLog = mongoose.model('DailyLog', dailyLogSchema);
+
+// Complete Persian Food Database
+const completeFoodDatabase = [
+    { name: "برنج سفید", calories: 130, protein: 2.7, carbs: 28, fat: 0.3, fiber: 0.4, category: "grains" },
+    { name: "نان سنگک", calories: 290, protein: 10, carbs: 59, fat: 1, fiber: 3, category: "grains" },
+    { name: "نان لواش", calories: 280, protein: 9, carbs: 58, fat: 1, fiber: 2.5, category: "grains" },
+    { name: "تخم مرغ", calories: 155, protein: 13, carbs: 1.1, fat: 11, fiber: 0, category: "protein" },
+    { name: "مرغ پخته", calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, category: "protein" },
+    { name: "گوشت گوساله", calories: 250, protein: 26, carbs: 0, fat: 17, fiber: 0, category: "protein" },
+    { name: "خورشت قورمه سبزی", calories: 170, protein: 10, carbs: 6, fat: 12, fiber: 2, category: "meals" },
+    { name: "خورشت قیمه", calories: 350, protein: 15, carbs: 30, fat: 20, fiber: 4, category: "meals" },
+    { name: "زرشک پلو با مرغ", calories: 450, protein: 25, carbs: 60, fat: 15, fiber: 2, category: "meals" },
+    { name: "آبگوشت", calories: 320, protein: 20, carbs: 25, fat: 16, fiber: 5, category: "meals" },
+    { name: "کتلت گوشت", calories: 300, protein: 15, carbs: 15, fat: 20, fiber: 2, category: "protein" },
+    { name: "کوکو سبزی", calories: 180, protein: 8, carbs: 10, fat: 12, fiber: 1.5, category: "meals" },
+    { name: "ماکارونی با گوشت", calories: 220, protein: 12, carbs: 28, fat: 8, fiber: 2, category: "meals" },
+    { name: "عدسی", calories: 110, protein: 9, carbs: 20, fat: 0.4, fiber: 8, category: "legumes" },
+    { name: "لوبیا چیتی پخته", calories: 127, protein: 8.7, carbs: 22.8, fat: 0.5, fiber: 6.4, category: "legumes" },
+    { name: "عدس پلو", calories: 250, protein: 10, carbs: 35, fat: 7, fiber: 5, category: "meals" },
+    { name: "لوبیا پلو", calories: 270, protein: 12, carbs: 40, fat: 8, fiber: 4, category: "meals" },
+    { name: "ته‌چین مرغ", calories: 300, protein: 20, carbs: 35, fat: 12, fiber: 1, category: "meals" },
+    { name: "کوفته تبریزی", calories: 330, protein: 18, carbs: 20, fat: 18, fiber: 3, category: "meals" },
+    { name: "خوراک لوبیا", calories: 140, protein: 9, carbs: 25, fat: 2, fiber: 7, category: "legumes" },
+    { name: "سوپ جو", calories: 85, protein: 3, carbs: 12, fat: 3, fiber: 1.5, category: "soups" },
+    { name: "سوپ مرغ", calories: 95, protein: 6, carbs: 8, fat: 4, fiber: 1, category: "soups" },
+    { name: "آش رشته", calories: 150, protein: 6, carbs: 20, fat: 6, fiber: 3, category: "soups" },
+    { name: "آش شله قلمکار", calories: 160, protein: 7, carbs: 22, fat: 5, fiber: 4, category: "soups" },
+    { name: "آش دوغ", calories: 80, protein: 4, carbs: 10, fat: 2, fiber: 1, category: "soups" },
+    { name: "فلافل", calories: 330, protein: 13, carbs: 31, fat: 18, fiber: 5, category: "protein" },
+    { name: "سمبوسه", calories: 290, protein: 10, carbs: 30, fat: 15, fiber: 2.5, category: "snacks" },
+    { name: "کله‌پاچه", calories: 400, protein: 20, carbs: 0, fat: 35, fiber: 0, category: "protein" },
+    { name: "سوسیس سرخ‌شده", calories: 320, protein: 12, carbs: 5, fat: 28, fiber: 0, category: "protein" },
+    { name: "کالباس مرغ", calories: 250, protein: 13, carbs: 2, fat: 20, fiber: 0, category: "protein" },
+    { name: "سالاد الویه", calories: 220, protein: 8, carbs: 12, fat: 15, fiber: 1.5, category: "salads" },
+    { name: "سالاد فصل", calories: 35, protein: 1, carbs: 7, fat: 0.2, fiber: 2, category: "salads" },
+    { name: "سالاد شیرازی", calories: 45, protein: 1, carbs: 8, fat: 0.3, fiber: 1.5, category: "salads" },
+    { name: "کاهو با لیمو", calories: 20, protein: 1.2, carbs: 3, fat: 0.1, fiber: 1, category: "vegetables" },
+    { name: "گوجه‌فرنگی", calories: 18, protein: 0.9, carbs: 3.9, fat: 0.2, fiber: 1.2, category: "vegetables" },
+    { name: "خیار", calories: 15, protein: 0.7, carbs: 3.6, fat: 0.1, fiber: 0.5, category: "vegetables" },
+    { name: "سیب", calories: 52, protein: 0.3, carbs: 14, fat: 0.2, fiber: 2.4, category: "fruits" },
+    { name: "موز", calories: 89, protein: 1.1, carbs: 23, fat: 0.3, fiber: 2.6, category: "fruits" },
+    { name: "پرتقال", calories: 47, protein: 0.9, carbs: 12, fat: 0.1, fiber: 2.4, category: "fruits" },
+    { name: "هندوانه", calories: 30, protein: 0.6, carbs: 8, fat: 0.2, fiber: 0.4, category: "fruits" },
+    { name: "طالبی", calories: 34, protein: 0.8, carbs: 8, fat: 0.2, fiber: 0.9, category: "fruits" },
+    { name: "انار", calories: 83, protein: 1.7, carbs: 19, fat: 1.2, fiber: 4, category: "fruits" },
+    { name: "خرما", calories: 277, protein: 1.8, carbs: 75, fat: 0.2, fiber: 6.7, category: "fruits" },
+    { name: "گردو", calories: 654, protein: 15, carbs: 14, fat: 65, fiber: 6.7, category: "nuts" },
+    { name: "بادام", calories: 579, protein: 21, carbs: 22, fat: 49, fiber: 12.5, category: "nuts" },
+    { name: "پسته", calories: 560, protein: 20, carbs: 28, fat: 45, fiber: 10, category: "nuts" },
+    { name: "فندق", calories: 628, protein: 15, carbs: 17, fat: 61, fiber: 9.7, category: "nuts" },
+    { name: "زیتون", calories: 115, protein: 0.8, carbs: 6, fat: 11, fiber: 3.3, category: "fats" },
+    { name: "روغن زیتون", calories: 884, protein: 0, carbs: 0, fat: 100, fiber: 0, category: "fats" },
+    { name: "کره", calories: 717, protein: 0.9, carbs: 0.1, fat: 81, fiber: 0, category: "fats" },
+    { name: "خامه صبحانه", calories: 340, protein: 2, carbs: 3, fat: 35, fiber: 0, category: "dairy" },
+    { name: "شیر کم‌چرب", calories: 42, protein: 3.4, carbs: 5, fat: 1, fiber: 0, category: "dairy" },
+    { name: "شیر پرچرب", calories: 60, protein: 3.2, carbs: 5, fat: 3.5, fiber: 0, category: "dairy" },
+    { name: "ماست کم‌چرب", calories: 56, protein: 5, carbs: 4, fat: 2, fiber: 0, category: "dairy" },
+    { name: "ماست پرچرب", calories: 80, protein: 5, carbs: 4, fat: 4.5, fiber: 0, category: "dairy" },
+    { name: "پنیر سفید", calories: 264, protein: 14, carbs: 2.2, fat: 21, fiber: 0, category: "dairy" },
+    { name: "پنیر لیقوان", calories: 280, protein: 15, carbs: 1.5, fat: 22, fiber: 0, category: "dairy" },
+    { name: "بستنی وانیلی", calories: 207, protein: 3.5, carbs: 24, fat: 11, fiber: 0.5, category: "desserts" },
+    { name: "شله‌زرد", calories: 140, protein: 2, carbs: 30, fat: 3, fiber: 0.5, category: "desserts" },
+    { name: "فرنی", calories: 120, protein: 3, carbs: 20, fat: 3, fiber: 0, category: "desserts" },
+    { name: "کاچی", calories: 250, protein: 3, carbs: 35, fat: 10, fiber: 1, category: "desserts" },
+    { name: "حلیم گندم", calories: 150, protein: 6, carbs: 25, fat: 3, fiber: 2, category: "meals" },
+    { name: "نان تست", calories: 265, protein: 9, carbs: 49, fat: 3.5, fiber: 2.7, category: "grains" },
+    { name: "نان بربری", calories: 280, protein: 9, carbs: 56, fat: 1, fiber: 3, category: "grains" },
+    { name: "کباب کوبیده", calories: 290, protein: 18, carbs: 1, fat: 25, fiber: 0, category: "protein" },
+    { name: "کباب برگ", calories: 250, protein: 22, carbs: 0, fat: 18, fiber: 0, category: "protein" },
+    { name: "جوجه کباب", calories: 200, protein: 23, carbs: 1, fat: 12, fiber: 0, category: "protein" },
+    { name: "ماهی قزل‌آلا", calories: 190, protein: 20, carbs: 0, fat: 12, fiber: 0, category: "protein" },
+    { name: "ماهی سالمون", calories: 208, protein: 20, carbs: 0, fat: 13, fiber: 0, category: "protein" },
+    { name: "تن ماهی", calories: 180, protein: 25, carbs: 0, fat: 8, fiber: 0, category: "protein" },
+    { name: "خوراک دل و جگر", calories: 250, protein: 18, carbs: 2, fat: 20, fiber: 0, category: "protein" },
+    { name: "فست‌فود پیتزا پپرونی", calories: 270, protein: 12, carbs: 26, fat: 14, fiber: 2, category: "fast_food" },
+    { name: "پیتزا مخلوط", calories: 290, protein: 13, carbs: 28, fat: 16, fiber: 2.5, category: "fast_food" },
+    { name: "برگر گوشت", calories: 280, protein: 15, carbs: 26, fat: 14, fiber: 1.5, category: "fast_food" },
+    { name: "ناگت مرغ", calories: 270, protein: 13, carbs: 20, fat: 16, fiber: 1, category: "fast_food" },
+    { name: "سیب‌زمینی سرخ‌شده", calories: 312, protein: 3.4, carbs: 41, fat: 15, fiber: 3.8, category: "vegetables" },
+    { name: "چیپس سیب‌زمینی", calories: 536, protein: 7, carbs: 52, fat: 34, fiber: 4, category: "snacks" },
+    { name: "پفک", calories: 560, protein: 7, carbs: 55, fat: 35, fiber: 2, category: "snacks" },
+    { name: "شکلات تخته‌ای", calories: 546, protein: 5, carbs: 60, fat: 31, fiber: 3, category: "sweets" },
+    { name: "بیسکوییت", calories: 480, protein: 6, carbs: 65, fat: 20, fiber: 2, category: "snacks" },
+    { name: "کیک یزدی", calories: 410, protein: 5, carbs: 50, fat: 20, fiber: 1, category: "desserts" },
+    { name: "خرمالو", calories: 70, protein: 0.6, carbs: 18, fat: 0.2, fiber: 3.6, category: "fruits" },
+    { name: "انگور", calories: 67, protein: 0.6, carbs: 17, fat: 0.2, fiber: 0.9, category: "fruits" },
+    { name: "توت‌فرنگی", calories: 32, protein: 0.7, carbs: 7.7, fat: 0.3, fiber: 2, category: "fruits" },
+    { name: "آلو بخارا", calories: 240, protein: 2.2, carbs: 64, fat: 0.4, fiber: 7, category: "fruits" },
+    { name: "کشمش", calories: 299, protein: 3.1, carbs: 79, fat: 0.5, fiber: 3.7, category: "fruits" },
+    { name: "لواشک", calories: 260, protein: 1, carbs: 65, fat: 0.2, fiber: 2, category: "snacks" },
+    { name: "ژله", calories: 70, protein: 1, carbs: 17, fat: 0, fiber: 0, category: "desserts" },
+    { name: "نوشابه", calories: 42, protein: 0, carbs: 11, fat: 0, fiber: 0, category: "beverages" },
+    { name: "دلستر", calories: 46, protein: 0.2, carbs: 11, fat: 0, fiber: 0, category: "beverages" },
+    { name: "آب پرتقال طبیعی", calories: 45, protein: 0.7, carbs: 10, fat: 0.1, fiber: 0.2, category: "beverages" },
+    { name: "چای بدون قند", calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, category: "beverages" },
+    { name: "قهوه بدون شکر", calories: 2, protein: 0.3, carbs: 0, fat: 0, fiber: 0, category: "beverages" },
+    { name: "شربت سکنجبین", calories: 150, protein: 0, carbs: 38, fat: 0, fiber: 0, category: "beverages" },
+    { name: "حلوا ارده", calories: 560, protein: 12, carbs: 30, fat: 40, fiber: 4, category: "sweets" },
+    { name: "ارده خالص", calories: 595, protein: 17, carbs: 21, fat: 50, fiber: 5, category: "nuts" },
+    { name: "عسل", calories: 304, protein: 0.3, carbs: 82, fat: 0, fiber: 0.2, category: "sweets" },
+    { name: "مربای توت", calories: 278, protein: 0.3, carbs: 73, fat: 0, fiber: 1, category: "sweets" },
+    { name: "کره بادام‌زمینی", calories: 588, protein: 25, carbs: 20, fat: 50, fiber: 6, category: "nuts" },
+    { name: "حلوا", calories: 450, protein: 5, carbs: 60, fat: 20, fiber: 1.5, category: "sweets" },
+    { name: "کشک", calories: 105, protein: 12, carbs: 10, fat: 3, fiber: 0, category: "dairy" },
+    { name: "آش کشک", calories: 160, protein: 7, carbs: 18, fat: 6, fiber: 3, category: "soups" },
+    { name: "لوبیا سبز پخته", calories: 35, protein: 2, carbs: 8, fat: 0.1, fiber: 3, category: "vegetables" },
+    { name: "نخود آب‌پز", calories: 164, protein: 9, carbs: 27, fat: 2.6, fiber: 7.6, category: "legumes" },
+    { name: "عدس خام", calories: 352, protein: 25, carbs: 60, fat: 1, fiber: 31, category: "legumes" },
+    { name: "برنج قهوه‌ای", calories: 112, protein: 2.6, carbs: 23, fat: 0.9, fiber: 1.8, category: "grains" },
+    { name: "بلغور گندم", calories: 342, protein: 12, carbs: 76, fat: 1.3, fiber: 12, category: "grains" },
+    { name: "جو پرک", calories: 389, protein: 17, carbs: 66, fat: 6.9, fiber: 10, category: "grains" },
+    { name: "ذرت پخته", calories: 96, protein: 3.4, carbs: 21, fat: 1.5, fiber: 2.7, category: "vegetables" },
+    { name: "ذرت بوداده (پاپ‌کورن)", calories: 387, protein: 13, carbs: 78, fat: 4.5, fiber: 15, category: "snacks" },
+    { name: "آب نارنج طبیعی", calories: 17, protein: 0.3, carbs: 4, fat: 0.1, fiber: 0.3, category: "beverages" },
+    { name: "کشمش سبز", calories: 320, protein: 2.8, carbs: 79, fat: 0.5, fiber: 3, category: "fruits" },
+    { name: "شیره انگور", calories: 293, protein: 0.8, carbs: 75, fat: 0.1, fiber: 1, category: "sweets" },
+    { name: "شیره خرما", calories: 300, protein: 1, carbs: 73, fat: 0.1, fiber: 1.5, category: "sweets" },
+    { name: "انگور سیاه", calories: 69, protein: 0.7, carbs: 17, fat: 0.2, fiber: 1, category: "fruits" },
+    { name: "زردآلو خشک", calories: 241, protein: 3.4, carbs: 63, fat: 0.5, fiber: 7, category: "fruits" },
+    { name: "انجیر خشک", calories: 249, protein: 3.3, carbs: 64, fat: 0.9, fiber: 9.8, category: "fruits" },
+    { name: "سیب‌زمینی پخته", calories: 87, protein: 1.9, carbs: 20, fat: 0.1, fiber: 1.8, category: "vegetables" },
+    { name: "سیب‌زمینی آب‌پز", calories: 77, protein: 2, carbs: 17, fat: 0.1, fiber: 2.2, category: "vegetables" },
+    { name: "پوره سیب‌زمینی", calories: 110, protein: 2, carbs: 15, fat: 4.5, fiber: 1.3, category: "vegetables" },
+    { name: "کدو سبز پخته", calories: 17, protein: 1.2, carbs: 3.1, fat: 0.3, fiber: 1, category: "vegetables" },
+    { name: "بادمجان کبابی", calories: 25, protein: 1, carbs: 5.8, fat: 0.1, fiber: 3, category: "vegetables" },
+    { name: "بادمجان سرخ‌شده", calories: 150, protein: 1.2, carbs: 7, fat: 13, fiber: 2.5, category: "vegetables" },
+    { name: "خوراک بادمجان", calories: 120, protein: 2, carbs: 10, fat: 8, fiber: 3, category: "vegetables" },
+    { name: "خوراک قارچ", calories: 90, protein: 5, carbs: 4, fat: 6, fiber: 1.5, category: "vegetables" },
+    { name: "قارچ خام", calories: 22, protein: 3.1, carbs: 3.3, fat: 0.3, fiber: 1, category: "vegetables" },
+    { name: "سبزی خوردن", calories: 30, protein: 2.5, carbs: 5.5, fat: 0.5, fiber: 3.2, category: "vegetables" },
+    { name: "اسفناج پخته", calories: 23, protein: 3, carbs: 3.8, fat: 0.3, fiber: 2.2, category: "vegetables" },
+    { name: "نعناع تازه", calories: 44, protein: 3.7, carbs: 8, fat: 0.7, fiber: 2.8, category: "herbs" },
+    { name: "ریحان", calories: 23, protein: 3.2, carbs: 2.7, fat: 0.6, fiber: 1.6, category: "herbs" },
+    { name: "پیاز خام", calories: 40, protein: 1.1, carbs: 9.3, fat: 0.1, fiber: 1.7, category: "vegetables" },
+    { name: "پیاز سرخ‌شده", calories: 258, protein: 1.6, carbs: 23, fat: 18, fiber: 1.3, category: "vegetables" },
+    { name: "سیر خام", calories: 149, protein: 6.4, carbs: 33, fat: 0.5, fiber: 2.1, category: "vegetables" },
+    { name: "سیر داغ", calories: 270, protein: 5, carbs: 20, fat: 20, fiber: 1, category: "vegetables" },
+    { name: "زعفران خشک", calories: 310, protein: 11, carbs: 65, fat: 6, fiber: 3.9, category: "spices" },
+    { name: "سماق", calories: 105, protein: 2.3, carbs: 22, fat: 1.5, fiber: 4.7, category: "spices" },
+    { name: "رب گوجه‌فرنگی", calories: 82, protein: 4.3, carbs: 19, fat: 0.5, fiber: 3, category: "sauces" },
+    { name: "سس گوجه", calories: 85, protein: 2, carbs: 20, fat: 0.3, fiber: 1.8, category: "sauces" },
+    { name: "سس مایونز", calories: 680, protein: 1, carbs: 1.2, fat: 75, fiber: 0, category: "sauces" },
+    { name: "سس کچاپ", calories: 90, protein: 1, carbs: 23, fat: 0.2, fiber: 0.5, category: "sauces" },
+    { name: "ترشی مخلوط", calories: 60, protein: 1, carbs: 10, fat: 0.2, fiber: 2.5, category: "pickles" },
+    { name: "خیارشور", calories: 12, protein: 0.5, carbs: 2.5, fat: 0, fiber: 1, category: "pickles" },
+    { name: "مربای هویج", calories: 260, protein: 0.5, carbs: 66, fat: 0.1, fiber: 1, category: "sweets" },
+    { name: "مربای آلبالو", calories: 270, protein: 0.3, carbs: 68, fat: 0.1, fiber: 0.9, category: "sweets" },
+    { name: "حلوا شکری", calories: 540, protein: 12, carbs: 30, fat: 40, fiber: 3, category: "sweets" },
+    { name: "باسلوق", calories: 360, protein: 0.8, carbs: 90, fat: 0.5, fiber: 0.5, category: "sweets" },
+    { name: "زولبیا", calories: 450, protein: 3, carbs: 70, fat: 20, fiber: 0.5, category: "sweets" },
+    { name: "بامیه", calories: 440, protein: 2.5, carbs: 65, fat: 18, fiber: 0.6, category: "sweets" },
+    { name: "شیرینی نخودچی", calories: 510, protein: 10, carbs: 45, fat: 30, fiber: 3, category: "sweets" },
+    { name: "شیرینی زبان", calories: 500, protein: 5, carbs: 60, fat: 28, fiber: 1, category: "sweets" },
+    { name: "شیرینی دانمارکی", calories: 420, protein: 5, carbs: 50, fat: 22, fiber: 1, category: "sweets" },
+    { name: "کیک شکلاتی", calories: 410, protein: 6, carbs: 55, fat: 18, fiber: 1.5, category: "desserts" },
+    { name: "دونات", calories: 452, protein: 4.9, carbs: 51, fat: 25, fiber: 1, category: "desserts" },
+    { name: "پنکیک", calories: 227, protein: 6, carbs: 28, fat: 10, fiber: 1, category: "desserts" },
+    { name: "کرپ", calories: 220, protein: 5.5, carbs: 26, fat: 10, fiber: 0.8, category: "desserts" },
+    { name: "املت گوجه‌فرنگی", calories: 140, protein: 7, carbs: 5, fat: 10, fiber: 1.2, category: "protein" },
+    { name: "املت قارچ", calories: 150, protein: 8, carbs: 4, fat: 11, fiber: 1.5, category: "protein" },
+    { name: "نرگسی اسفناج", calories: 160, protein: 9, carbs: 4, fat: 11, fiber: 2, category: "protein" },
+    { name: "خاگینه", calories: 220, protein: 6, carbs: 25, fat: 11, fiber: 1, category: "protein" },
+    { name: "شیر برنج", calories: 110, protein: 2, carbs: 23, fat: 1.5, fiber: 0.3, category: "desserts" },
+    { name: "سمنو", calories: 250, protein: 4, carbs: 55, fat: 2, fiber: 2, category: "desserts" },
+    { name: "کوکوی سیب‌زمینی", calories: 180, protein: 6, carbs: 20, fat: 9, fiber: 1.5, category: "protein" },
+    { name: "شامی کباب", calories: 270, protein: 15, carbs: 12, fat: 18, fiber: 1, category: "protein" },
+    { name: "هویج پخته", calories: 35, protein: 0.8, carbs: 8, fat: 0.2, fiber: 3, category: "vegetables" },
+    { name: "نخود فرنگی", calories: 81, protein: 5, carbs: 14, fat: 0.4, fiber: 5.7, category: "vegetables" },
+    { name: "لوبیا سبز با گوشت", calories: 130, protein: 10, carbs: 8, fat: 7, fiber: 3, category: "meals" },
+    { name: "خورش کرفس", calories: 170, protein: 8, carbs: 6, fat: 12, fiber: 2.5, category: "meals" },
+    { name: "خورش آلو اسفناج", calories: 160, protein: 7, carbs: 10, fat: 9, fiber: 2.8, category: "meals" },
+    { name: "خورش خلال بادام", calories: 180, protein: 10, carbs: 6, fat: 13, fiber: 1.8, category: "meals" },
+    { name: "خوراک هویج", calories: 120, protein: 5, carbs: 10, fat: 7, fiber: 2, category: "vegetables" },
+    { name: "دلمه برگ مو", calories: 160, protein: 5, carbs: 22, fat: 7, fiber: 2, category: "meals" },
+    { name: "دلمه فلفل دلمه‌ای", calories: 180, protein: 6, carbs: 20, fat: 9, fiber: 3, category: "meals" },
+    { name: "کلم پلو", calories: 270, protein: 10, carbs: 35, fat: 10, fiber: 3, category: "meals" },
+    { name: "باقالی پلو", calories: 290, protein: 9, carbs: 38, fat: 12, fiber: 4, category: "meals" },
+    { name: "سبزی پلو", calories: 250, protein: 8, carbs: 35, fat: 9, fiber: 3, category: "meals" },
+    { name: "ته‌دیگ سیب‌زمینی", calories: 360, protein: 4, carbs: 40, fat: 20, fiber: 2.5, category: "grains" },
+    { name: "ته‌دیگ نان", calories: 400, protein: 5, carbs: 42, fat: 22, fiber: 2, category: "grains" },
+    { name: "چلو کره", calories: 350, protein: 4, carbs: 42, fat: 18, fiber: 0.8, category: "grains" },
+    { name: "قیمه بادمجان", calories: 300, protein: 10, carbs: 12, fat: 20, fiber: 3, category: "meals" },
+    { name: "کشک بادمجان", calories: 220, protein: 6, carbs: 8, fat: 15, fiber: 2, category: "meals" },
+    { name: "قورمه سبزی با لوبیا قرمز", calories: 180, protein: 10, carbs: 6, fat: 12, fiber: 3, category: "meals" },
+    { name: "فسنجان", calories: 400, protein: 10, carbs: 10, fat: 35, fiber: 2, category: "meals" },
+    { name: "فسنجان با مرغ", calories: 370, protein: 18, carbs: 8, fat: 28, fiber: 1.8, category: "meals" },
+    { name: "خورش بامیه", calories: 140, protein: 8, carbs: 7, fat: 9, fiber: 2, category: "meals" },
+    { name: "اشکنه", calories: 180, protein: 5, carbs: 10, fat: 13, fiber: 1, category: "soups" },
+    { name: "آش ماش", calories: 130, protein: 6, carbs: 18, fat: 3, fiber: 4, category: "soups" },
+    { name: "آش جو", calories: 140, protein: 5, carbs: 22, fat: 4, fiber: 3, category: "soups" },
+    { name: "کله جوش", calories: 220, protein: 8, carbs: 5, fat: 18, fiber: 1, category: "protein" },
+    { name: "دیزی سنگی", calories: 320, protein: 15, carbs: 25, fat: 20, fiber: 4, category: "meals" },
+    { name: "آبگوشت بزباش", calories: 300, protein: 14, carbs: 18, fat: 18, fiber: 3, category: "meals" },
+    { name: "کشک و بادمجان با نعنا داغ", calories: 230, protein: 7, carbs: 9, fat: 16, fiber: 2, category: "meals" },
+    { name: "دمپختک", calories: 270, protein: 7, carbs: 38, fat: 10, fiber: 3, category: "meals" },
+    { name: "گوجه‌پلو", calories: 260, protein: 6, carbs: 36, fat: 9, fiber: 2, category: "meals" },
+    { name: "شیرینی برنجی", calories: 520, protein: 6, carbs: 60, fat: 28, fiber: 1, category: "sweets" },
+    { name: "شیرینی کره‌ای", calories: 530, protein: 5, carbs: 58, fat: 30, fiber: 1, category: "sweets" },
+    { name: "نان خامه‌ای", calories: 340, protein: 4, carbs: 35, fat: 20, fiber: 0.5, category: "grains" },
+    { name: "نان قندی", calories: 460, protein: 5, carbs: 60, fat: 22, fiber: 1, category: "grains" },
+    { name: "باقلوا", calories: 510, protein: 6, carbs: 60, fat: 28, fiber: 1.5, category: "sweets" },
+    { name: "قطاب", calories: 530, protein: 6, carbs: 55, fat: 32, fiber: 1.2, category: "sweets" },
+    { name: "سوهان", calories: 550, protein: 7, carbs: 50, fat: 35, fiber: 1, category: "sweets" },
+    { name: "گز اصفهان", calories: 480, protein: 4, carbs: 78, fat: 16, fiber: 0.5, category: "sweets" },
+    { name: "نبات", calories: 400, protein: 0, carbs: 100, fat: 0, fiber: 0, category: "sweets" },
+    { name: "قند", calories: 398, protein: 0, carbs: 99.5, fat: 0, fiber: 0, category: "sweets" },
+    { name: "شکر", calories: 387, protein: 0, carbs: 100, fat: 0, fiber: 0, category: "sweets" },
+    { name: "خرمای مضافتی", calories: 282, protein: 2.5, carbs: 75, fat: 0.4, fiber: 8, category: "fruits" },
+    { name: "حلوا آردی", calories: 450, protein: 6, carbs: 60, fat: 20, fiber: 1, category: "sweets" },
+    { name: "رشته خشکار", calories: 330, protein: 5, carbs: 65, fat: 8, fiber: 1.5, category: "sweets" },
+    { name: "شیرینی لطیفه", calories: 340, protein: 4, carbs: 45, fat: 18, fiber: 0.5, category: "sweets" },
+    { name: "فالوده شیرازی", calories: 180, protein: 0.5, carbs: 45, fat: 0.2, fiber: 0.2, category: "desserts" },
+    { name: "بستنی زعفرانی", calories: 210, protein: 3.5, carbs: 25, fat: 10, fiber: 0.5, category: "desserts" },
+    { name: "یخ در بهشت", calories: 140, protein: 0, carbs: 36, fat: 0, fiber: 0, category: "desserts" },
+    { name: "شربت خاکشیر", calories: 80, protein: 0.2, carbs: 20, fat: 0, fiber: 0.5, category: "beverages" },
+    { name: "آب‌هویج", calories: 40, protein: 1, carbs: 9, fat: 0.2, fiber: 0.8, category: "beverages" },
+    { name: "آب‌طالبی", calories: 35, protein: 0.6, carbs: 8, fat: 0.1, fiber: 0.5, category: "beverages" },
+    { name: "دوغ بدون گاز", calories: 28, protein: 2, carbs: 3, fat: 1, fiber: 0, category: "beverages" },
+    { name: "دوغ گازدار", calories: 32, protein: 2, carbs: 3.5, fat: 1.5, fiber: 0, category: "beverages" },
+    { name: "شیر کاکائو", calories: 72, protein: 3, carbs: 10, fat: 2, fiber: 0.5, category: "beverages" },
+    { name: "نوشیدنی انرژی‌زا", calories: 45, protein: 0, carbs: 11, fat: 0, fiber: 0, category: "beverages" },
+    { name: "ماءالشعیر طعم‌دار", calories: 50, protein: 0.5, carbs: 12, fat: 0, fiber: 0, category: "beverages" },
+    { name: "قهوه با شکر", calories: 35, protein: 0.3, carbs: 8, fat: 0, fiber: 0, category: "beverages" },
+    { name: "نسکافه", calories: 10, protein: 0.2, carbs: 1.7, fat: 0.1, fiber: 0, category: "beverages" },
+    { name: "قهوه فوری", calories: 4, protein: 0.5, carbs: 1, fat: 0, fiber: 0, category: "beverages" },
+    { name: "بیف‌استراگانف", calories: 250, protein: 20, carbs: 7, fat: 16, fiber: 1, category: "international" },
+    { name: "چیکن آلفردو", calories: 280, protein: 22, carbs: 8, fat: 18, fiber: 1.2, category: "international" },
+    { name: "لازانیا", calories: 310, protein: 15, carbs: 30, fat: 15, fiber: 2, category: "international" },
+    { name: "پاستا پستو", calories: 350, protein: 10, carbs: 35, fat: 20, fiber: 1.5, category: "international" },
+    { name: "اسپاگتی با گوشت", calories: 280, protein: 14, carbs: 30, fat: 12, fiber: 2, category: "international" },
+    { name: "ریزوتو قارچ", calories: 190, protein: 5, carbs: 28, fat: 7, fiber: 1.8, category: "international" },
+    { name: "نودل فوری", calories: 450, protein: 8, carbs: 60, fat: 18, fiber: 2, category: "fast_food" },
+    { name: "پیتزا سبزیجات", calories: 240, protein: 8, carbs: 28, fat: 10, fiber: 3, category: "fast_food" },
+    { name: "پیتزا مارگاریتا", calories: 250, protein: 9, carbs: 30, fat: 11, fiber: 2, category: "fast_food" },
+    { name: "چیکن برگر", calories: 270, protein: 14, carbs: 24, fat: 13, fiber: 1.5, category: "fast_food" },
+    { name: "مرغ سوخاری", calories: 290, protein: 17, carbs: 10, fat: 18, fiber: 1, category: "fast_food" },
+    { name: "کباب ترکی", calories: 260, protein: 16, carbs: 10, fat: 15, fiber: 1, category: "protein" },
+    { name: "فاهیتای مرغ", calories: 230, protein: 20, carbs: 6, fat: 14, fiber: 2, category: "international" },
+    { name: "برگر گیاهی", calories: 190, protein: 10, carbs: 20, fat: 7, fiber: 4, category: "fast_food" },
+    { name: "سیب‌زمینی پخته با کره", calories: 140, protein: 2, carbs: 18, fat: 6, fiber: 2, category: "vegetables" },
+    { name: "مرغ کنتاکی", calories: 310, protein: 19, carbs: 12, fat: 20, fiber: 1, category: "fast_food" },
+    { name: "قارچ سوخاری", calories: 270, protein: 6, carbs: 25, fat: 16, fiber: 2, category: "fast_food" },
+    { name: "ناگت سبزیجات", calories: 220, protein: 7, carbs: 22, fat: 12, fiber: 3, category: "fast_food" },
+    { name: "دسر پاناکوتا", calories: 200, protein: 3, carbs: 20, fat: 12, fiber: 0, category: "desserts" },
+    { name: "کرم‌کارامل", calories: 150, protein: 3, carbs: 25, fat: 4, fiber: 0, category: "desserts" },
+    { name: "تیرامیسو", calories: 290, protein: 5, carbs: 30, fat: 18, fiber: 1, category: "desserts" },
+    { name: "چیزکیک", calories: 321, protein: 6, carbs: 30, fat: 20, fiber: 1, category: "desserts" },
+    { name: "موس شکلات", calories: 240, protein: 4, carbs: 25, fat: 14, fiber: 1, category: "desserts" },
+    { name: "ژله میوه‌ای", calories: 75, protein: 0.5, carbs: 18, fat: 0, fiber: 0, category: "desserts" },
+    { name: "بستنی میوه‌ای", calories: 160, protein: 2.5, carbs: 24, fat: 6, fiber: 0.8, category: "desserts" },
+    { name: "گرانولا", calories: 471, protein: 10, carbs: 64, fat: 20, fiber: 7, category: "breakfast" },
+    { name: "کورن‌فلکس", calories: 370, protein: 7, carbs: 84, fat: 1, fiber: 2, category: "breakfast" },
+    { name: "جو دوسر پرک", calories: 389, protein: 17, carbs: 66, fat: 6.9, fiber: 10, category: "grains" }
+];
+
+// JWT Middleware
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({ error: 'توکن احراز هویت مورد نیاز است' });
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET || 'secret_key', (err, user) => {
+        if (err) {
+            return res.status(403).json({ error: 'توکن نامعتبر است' });
+        }
+        req.user = user;
+        next();
+    });
+};
+
+// Multer for file uploads
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'uploads/');
+    },
+    filename: function (req, file, cb) {
+        cb(null, Date.now() + '-' + file.originalname);
+    }
+});
+const upload = multer({ storage: storage });
+
+// ===================== AUTH ROUTES =====================
+
+// Register
+app.post('/api/auth/register', async (req, res) => {
+    try {
+        const { email, password, name } = req.body;
+
+        // Check if user exists
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(400).json({ error: 'کاربری با این ایمیل قبلاً ثبت نام کرده است' });
+        }
+
+        // Hash password
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Create user
+        const user = new User({
+            email,
+            password: hashedPassword,
+            name: name || ''
+        });
+
+        await user.save();
+
+        // Generate token
+        const token = jwt.sign(
+            { userId: user._id, email: user.email },
+            process.env.JWT_SECRET || 'secret_key',
+            { expiresIn: '7d' }
+        );
+
+        res.status(201).json({
+            message: 'کاربر با موفقیت ثبت نام شد',
+            token,
+            user: {
+                id: user._id,
+                email: user.email,
+                name: user.name,
+                settings: user.settings,
+                goals: user.goals
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در ثبت نام کاربر' });
+    }
+});
+
+// Login
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        // Find user
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(400).json({ error: 'ایمیل یا رمز عبور اشتباه است' });
+        }
+
+        // Check password
+        const isValidPassword = await bcrypt.compare(password, user.password);
+        if (!isValidPassword) {
+            return res.status(400).json({ error: 'ایمیل یا رمز عبور اشتباه است' });
+        }
+
+        // Update last login
+        user.lastLogin = new Date();
+        await user.save();
+
+        // Generate token
+        const token = jwt.sign(
+            { userId: user._id, email: user.email },
+            process.env.JWT_SECRET || 'secret_key',
+            { expiresIn: '7d' }
+        );
+
+        res.json({
+            message: 'ورود موفقیت آمیز',
+            token,
+            user: {
+                id: user._id,
+                email: user.email,
+                name: user.name,
+                settings: user.settings,
+                goals: user.goals
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در ورود کاربر' });
+    }
+});
+
+// ===================== USER ROUTES =====================
+
+// Get user profile
+app.get('/api/user/profile', authenticateToken, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.userId).select('-password');
+        res.json(user);
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در دریافت اطلاعات کاربر' });
+    }
+});
+
+// Update user profile
+app.put('/api/user/profile', authenticateToken, async (req, res) => {
+    try {
+        const { name, settings } = req.body;
+        
+        const user = await User.findById(req.user.userId);
+        if (name !== undefined) user.name = name;
+        if (settings) user.settings = { ...user.settings, ...settings };
+
+        await user.save();
+        
+        res.json({
+            message: 'اطلاعات کاربر به‌روزرسانی شد',
+            user: {
+                id: user._id,
+                email: user.email,
+                name: user.name,
+                settings: user.settings,
+                goals: user.goals
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در به‌روزرسانی اطلاعات کاربر' });
+    }
+});
+
+// Update user goals
+app.put('/api/user/goals', authenticateToken, async (req, res) => {
+    try {
+        const { calories, protein, carbs, fat, water } = req.body;
+        
+        const user = await User.findById(req.user.userId);
+        user.goals = {
+            calories: calories || user.goals.calories,
+            protein: protein || user.goals.protein,
+            carbs: carbs || user.goals.carbs,
+            fat: fat || user.goals.fat,
+            water: water || user.goals.water
+        };
+
+        await user.save();
+        
+        res.json({
+            message: 'اهداف با موفقیت به‌روزرسانی شد',
+            goals: user.goals
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در به‌روزرسانی اهداف' });
+    }
+});
+
+// ===================== FOOD DATABASE ROUTES =====================
+
+// Get foods (user's + public foods)
+app.get('/api/foods', authenticateToken, async (req, res) => {
+    try {
+        const { search, category } = req.query;
+        let query = {
+            $or: [
+                { createdBy: req.user.userId },
+                { isPublic: true }
+            ]
+        };
+
+        if (search) {
+            query.name = { $regex: search, $options: 'i' };
+        }
+
+        if (category && category !== 'all') {
+            query.category = category;
+        }
+
+        const foods = await Food.find(query)
+            .populate('createdBy', 'name')
+            .sort({ name: 1 });
+
+        res.json(foods);
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در دریافت غذاها' });
+    }
+});
+
+// Get food categories
+app.get('/api/foods/categories', authenticateToken, async (req, res) => {
+    try {
+        const categories = await Food.distinct('category', {
+            $or: [
+                { createdBy: req.user.userId },
+                { isPublic: true }
+            ]
+        });
+
+        const categoryMap = {
+            'grains': 'غلات',
+            'protein': 'پروتئین',
+            'vegetables': 'سبزیجات',
+            'fruits': 'میوه‌ها',
+            'dairy': 'لبنیات',
+            'nuts': 'آجیل',
+            'fats': 'روغن‌ها',
+            'legumes': 'حبوبات',
+            'meals': 'غذاهای اصلی',
+            'soups': 'سوپ‌ها',
+            'salads': 'سالادها',
+            'snacks': 'تنقلات',
+            'sweets': 'شیرینی‌ها',
+            'desserts': 'دسرها',
+            'beverages': 'نوشیدنی‌ها',
+            'fast_food': 'فست‌فود',
+            'international': 'غذاهای بین‌المللی',
+            'breakfast': 'صبحانه',
+            'herbs': 'سبزیجات معطر',
+            'spices': 'ادویه‌ها',
+            'sauces': 'سس‌ها',
+            'pickles': 'ترشیجات',
+            'other': 'سایر'
+        };
+
+        const categoriesWithLabels = categories.map(cat => ({
+            value: cat,
+            label: categoryMap[cat] || cat
+        }));
+
+        res.json(categoriesWithLabels);
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در دریافت دسته‌بندی‌ها' });
+    }
+});
+
+// Add new food
+app.post('/api/foods', authenticateToken, async (req, res) => {
+    try {
+        const { name, calories, protein, carbs, fat, fiber, category, isPublic } = req.body;
+
+        const food = new Food({
+            name,
+            calories,
+            protein: protein || 0,
+            carbs: carbs || 0,
+            fat: fat || 0,
+            fiber: fiber || 0,
+            category: category || 'other',
+            isPublic: isPublic || false,
+            createdBy: req.user.userId
+        });
+
+        await food.save();
+        await food.populate('createdBy', 'name');
+
+        res.status(201).json({
+            message: 'غذا با موفقیت اضافه شد',
+            food
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در افزودن غذا' });
+    }
+});
+
+// Update food
+app.put('/api/foods/:id', authenticateToken, async (req, res) => {
+    try {
+        const food = await Food.findOne({
+            _id: req.params.id,
+            createdBy: req.user.userId
+        });
+
+        if (!food) {
+            return res.status(404).json({ error: 'غذا یافت نشد یا شما مجاز به ویرایش آن نیستید' });
+        }
+
+        const { name, calories, protein, carbs, fat, fiber, category, isPublic } = req.body;
+
+        food.name = name || food.name;
+        food.calories = calories !== undefined ? calories : food.calories;
+        food.protein = protein !== undefined ? protein : food.protein;
+        food.carbs = carbs !== undefined ? carbs : food.carbs;
+        food.fat = fat !== undefined ? fat : food.fat;
+        food.fiber = fiber !== undefined ? fiber : food.fiber;
+        food.category = category || food.category;
+        food.isPublic = isPublic !== undefined ? isPublic : food.isPublic;
+
+        await food.save();
+        await food.populate('createdBy', 'name');
+
+        res.json({
+            message: 'غذا با موفقیت به‌روزرسانی شد',
+            food
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در به‌روزرسانی غذا' });
+    }
+});
+
+// Delete food
+app.delete('/api/foods/:id', authenticateToken, async (req, res) => {
+    try {
+        const food = await Food.findOneAndDelete({
+            _id: req.params.id,
+            createdBy: req.user.userId
+        });
+
+        if (!food) {
+            return res.status(404).json({ error: 'غذا یافت نشد یا شما مجاز به حذف آن نیستید' });
+        }
+
+        res.json({ message: 'غذا با موفقیت حذف شد' });
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در حذف غذا' });
+    }
+});
+
+// Import foods from JSON
+app.post('/api/foods/import', authenticateToken, upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'فایل ارسال نشده است' });
+        }
+
+        const fs = require('fs');
+        const fileContent = fs.readFileSync(req.file.path, 'utf8');
+        const importedData = JSON.parse(fileContent);
+
+        let foods = [];
+        if (Array.isArray(importedData)) {
+            foods = importedData;
+        } else if (importedData.data && Array.isArray(importedData.data)) {
+            foods = importedData.data;
+        } else {
+            return res.status(400).json({ error: 'فرمت فایل نامعتبر است' });
+        }
+
+        let addedCount = 0;
+        const errors = [];
+
+        for (const foodData of foods) {
+            try {
+                if (!foodData.name || foodData.calories === undefined) {
+                    errors.push(`غذای نامعتبر: ${JSON.stringify(foodData)}`);
+                    continue;
+                }
+
+                // Check if food already exists
+                const existingFood = await Food.findOne({
+                    name: foodData.name,
+                    createdBy: req.user.userId
+                });
+
+                if (!existingFood) {
+                    const food = new Food({
+                        name: foodData.name,
+                        calories: foodData.calories,
+                        protein: foodData.protein || 0,
+                        carbs: foodData.carbs || 0,
+                        fat: foodData.fat || 0,
+                        fiber: foodData.fiber || 0,
+                        category: foodData.category || categorizeFood(foodData.name),
+                        isPublic: false,
+                        createdBy: req.user.userId
+                    });
+
+                    await food.save();
+                    addedCount++;
+                }
+            } catch (err) {
+                errors.push(`خطا در افزودن ${foodData.name}: ${err.message}`);
+            }
+        }
+
+        // Delete uploaded file
+        fs.unlinkSync(req.file.path);
+
+        res.json({
+            message: `${addedCount} غذا با موفقیت اضافه شد`,
+            addedCount,
+            errors: errors.length > 0 ? errors : undefined
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در وارد کردن غذاها' });
+    }
+});
+
+// Load complete Persian food database
+app.post('/api/foods/load-complete-database', authenticateToken, async (req, res) => {
+    try {
+        let addedCount = 0;
+        const errors = [];
+
+        for (const foodData of completeFoodDatabase) {
+            try {
+                // Check if food already exists for this user
+                const existingFood = await Food.findOne({
+                    name: foodData.name,
+                    createdBy: req.user.userId
+                });
+
+                if (!existingFood) {
+                    const food = new Food({
+                        name: foodData.name,
+                        calories: foodData.calories,
+                        protein: foodData.protein || 0,
+                        carbs: foodData.carbs || 0,
+                        fat: foodData.fat || 0,
+                        fiber: foodData.fiber || 0,
+                        category: foodData.category,
+                        isPublic: false,
+                        createdBy: req.user.userId
+                    });
+
+                    await food.save();
+                    addedCount++;
+                }
+            } catch (err) {
+                errors.push(`خطا در افزودن ${foodData.name}: ${err.message}`);
+            }
+        }
+
+        res.json({
+            message: `${addedCount} غذا از دیتابیس کامل اضافه شد`,
+            addedCount,
+            totalInDatabase: completeFoodDatabase.length,
+            errors: errors.length > 0 ? errors : undefined
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در بارگذاری دیتابیس کامل' });
+    }
+});
+
+// ===================== DAILY LOG ROUTES =====================
+
+// Get daily log
+app.get('/api/logs/:date', authenticateToken, async (req, res) => {
+    try {
+        const { date } = req.params;
+        
+        let dailyLog = await DailyLog.findOne({
+            userId: req.user.userId,
+            date
+        });
+
+        if (!dailyLog) {
+            // Create empty log for the day
+            dailyLog = new DailyLog({
+                userId: req.user.userId,
+                date,
+                meals: {
+                    breakfast: [],
+                    lunch: [],
+                    dinner: [],
+                    snack: []
+                },
+                totals: {
+                    calories: 0,
+                    protein: 0,
+                    carbs: 0,
+                    fat: 0,
+                    fiber: 0,
+                    water: 0
+                }
+            });
+        }
+
+        res.json(dailyLog);
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در دریافت اطلاعات روز' });
+    }
+});
+
+// Add food to meal
+app.post('/api/logs/:date/meals/:mealType', authenticateToken, async (req, res) => {
+    try {
+        const { date, mealType } = req.params;
+        const { name, amount, calories, protein, carbs, fat, fiber } = req.body;
+
+        if (!['breakfast', 'lunch', 'dinner', 'snack'].includes(mealType)) {
+            return res.status(400).json({ error: 'نوع وعده نامعتبر است' });
+        }
+
+        let dailyLog = await DailyLog.findOne({
+            userId: req.user.userId,
+            date
+        });
+
+        if (!dailyLog) {
+            dailyLog = new DailyLog({
+                userId: req.user.userId,
+                date,
+                meals: {
+                    breakfast: [],
+                    lunch: [],
+                    dinner: [],
+                    snack: []
+                },
+                totals: {
+                    calories: 0,
+                    protein: 0,
+                    carbs: 0,
+                    fat: 0,
+                    fiber: 0,
+                    water: 0
+                }
+            });
+        }
+
+        const foodEntry = {
+            name,
+            amount,
+            calories,
+            protein: protein || 0,
+            carbs: carbs || 0,
+            fat: fat || 0,
+            fiber: fiber || 0,
+            timestamp: new Date()
+        };
+
+        dailyLog.meals[mealType].push(foodEntry);
+        
+        // Recalculate totals
+        dailyLog.totals = calculateDailyTotals(dailyLog.meals, dailyLog.totals.water);
+        dailyLog.updatedAt = new Date();
+
+        await dailyLog.save();
+
+        res.json({
+            message: 'غذا با موفقیت اضافه شد',
+            dailyLog
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در افزودن غذا به وعده' });
+    }
+});
+
+// Remove food from meal
+app.delete('/api/logs/:date/meals/:mealType/:itemIndex', authenticateToken, async (req, res) => {
+    try {
+        const { date, mealType, itemIndex } = req.params;
+
+        const dailyLog = await DailyLog.findOne({
+            userId: req.user.userId,
+            date
+        });
+
+        if (!dailyLog) {
+            return res.status(404).json({ error: 'اطلاعات روز یافت نشد' });
+        }
+
+        if (!['breakfast', 'lunch', 'dinner', 'snack'].includes(mealType)) {
+            return res.status(400).json({ error: 'نوع وعده نامعتبر است' });
+        }
+
+        const index = parseInt(itemIndex);
+        if (index < 0 || index >= dailyLog.meals[mealType].length) {
+            return res.status(400).json({ error: 'ایندکس نامعتبر است' });
+        }
+
+        dailyLog.meals[mealType].splice(index, 1);
+        
+        // Recalculate totals
+        dailyLog.totals = calculateDailyTotals(dailyLog.meals, dailyLog.totals.water);
+        dailyLog.updatedAt = new Date();
+
+        await dailyLog.save();
+
+        res.json({
+            message: 'غذا با موفقیت حذف شد',
+            dailyLog
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در حذف غذا از وعده' });
+    }
+});
+
+// Update water intake
+app.put('/api/logs/:date/water', authenticateToken, async (req, res) => {
+    try {
+        const { date } = req.params;
+        const { water } = req.body;
+
+        let dailyLog = await DailyLog.findOne({
+            userId: req.user.userId,
+            date
+        });
+
+        if (!dailyLog) {
+            dailyLog = new DailyLog({
+                userId: req.user.userId,
+                date,
+                meals: {
+                    breakfast: [],
+                    lunch: [],
+                    dinner: [],
+                    snack: []
+                },
+                totals: {
+                    calories: 0,
+                    protein: 0,
+                    carbs: 0,
+                    fat: 0,
+                    fiber: 0,
+                    water: 0
+                }
+            });
+        }
+
+        dailyLog.totals.water = Math.max(0, water);
+        dailyLog.updatedAt = new Date();
+
+        await dailyLog.save();
+
+        res.json({
+            message: 'مقدار آب به‌روزرسانی شد',
+            water: dailyLog.totals.water
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در به‌روزرسانی مقدار آب' });
+    }
+});
+
+// Clear day's meals
+app.delete('/api/logs/:date/meals', authenticateToken, async (req, res) => {
+    try {
+        const { date } = req.params;
+
+        const dailyLog = await DailyLog.findOne({
+            userId: req.user.userId,
+            date
+        });
+
+        if (!dailyLog) {
+            return res.status(404).json({ error: 'اطلاعات روز یافت نشد' });
+        }
+
+        const waterAmount = dailyLog.totals.water;
+
+        dailyLog.meals = {
+            breakfast: [],
+            lunch: [],
+            dinner: [],
+            snack: []
+        };
+
+        dailyLog.totals = {
+            calories: 0,
+            protein: 0,
+            carbs: 0,
+            fat: 0,
+            fiber: 0,
+            water: waterAmount
+        };
+
+        dailyLog.updatedAt = new Date();
+        await dailyLog.save();
+
+        res.json({
+            message: 'تمام وعده‌های روز پاک شد',
+            dailyLog
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در پاک کردن وعده‌های روز' });
+    }
+});
+
+// ===================== REPORTS ROUTES =====================
+
+// Get weekly report
+app.get('/api/reports/weekly', authenticateToken, async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        
+        const logs = await DailyLog.find({
+            userId: req.user.userId,
+            date: {
+                $gte: startDate,
+                $lte: endDate
+            }
+        }).sort({ date: 1 });
+
+        res.json(logs);
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در دریافت گزارش هفتگی' });
+    }
+});
+
+// Get monthly statistics
+app.get('/api/reports/monthly', authenticateToken, async (req, res) => {
+    try {
+        const { year, month } = req.query;
+        
+        const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
+        const endDate = `${year}-${month.toString().padStart(2, '0')}-31`;
+        
+        const logs = await DailyLog.find({
+            userId: req.user.userId,
+            date: {
+                $gte: startDate,
+                $lte: endDate
+            }
+        });
+
+        const stats = calculateMonthlyStats(logs);
+        res.json(stats);
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در دریافت آمار ماهانه' });
+    }
+});
+
+// ===================== BACKUP/RESTORE ROUTES =====================
+
+// Export user data
+app.get('/api/backup/export', authenticateToken, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.userId).select('-password');
+        const foods = await Food.find({ createdBy: req.user.userId });
+        const logs = await DailyLog.find({ userId: req.user.userId });
+
+        const exportData = {
+            version: '1.0',
+            timestamp: new Date().toISOString(),
+            data: {
+                user: {
+                    name: user.name,
+                    settings: user.settings,
+                    goals: user.goals
+                },
+                foods,
+                logs
+            }
+        };
+
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', 'attachment; filename=calorie_tracker_backup.json');
+        res.json(exportData);
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در ایجاد فایل پشتیبان' });
+    }
+});
+
+// Import user data
+app.post('/api/backup/import', authenticateToken, upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'فایل ارسال نشده است' });
+        }
+
+        const fs = require('fs');
+        const fileContent = fs.readFileSync(req.file.path, 'utf8');
+        const importedData = JSON.parse(fileContent);
+
+        if (!importedData.version || !importedData.data) {
+            return res.status(400).json({ error: 'فرمت فایل پشتیبان نامعتبر است' });
+        }
+
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            // Update user data
+            if (importedData.data.user) {
+                await User.findByIdAndUpdate(req.user.userId, {
+                    name: importedData.data.user.name,
+                    settings: importedData.data.user.settings,
+                    goals: importedData.data.user.goals
+                }, { session });
+            }
+
+            // Clear existing foods and logs
+            await Food.deleteMany({ createdBy: req.user.userId }, { session });
+            await DailyLog.deleteMany({ userId: req.user.userId }, { session });
+
+            // Import foods
+            if (importedData.data.foods && Array.isArray(importedData.data.foods)) {
+                const foods = importedData.data.foods.map(food => ({
+                    ...food,
+                    _id: undefined,
+                    createdBy: req.user.userId
+                }));
+                await Food.insertMany(foods, { session });
+            }
+
+            // Import logs
+            if (importedData.data.logs && Array.isArray(importedData.data.logs)) {
+                const logs = importedData.data.logs.map(log => ({
+                    ...log,
+                    _id: undefined,
+                    userId: req.user.userId
+                }));
+                await DailyLog.insertMany(logs, { session });
+            }
+
+            await session.commitTransaction();
+            
+            // Delete uploaded file
+            fs.unlinkSync(req.file.path);
+
+            res.json({ message: 'اطلاعات با موفقیت بازیابی شد' });
+        } catch (error) {
+            await session.abortTransaction();
+            throw error;
+        } finally {
+            session.endSession();
+        }
+    } catch (error) {
+        res.status(500).json({ error: 'خطا در بازیابی اطلاعات' });
+    }
+});
+
+// ===================== UTILITY FUNCTIONS =====================
+
+function calculateDailyTotals(meals, waterAmount = 0) {
+    let totals = {
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+        fiber: 0,
+        water: waterAmount
+    };
+
+    Object.values(meals).forEach(meal => {
+        meal.forEach(item => {
+            totals.calories += item.calories || 0;
+            totals.protein += item.protein || 0;
+            totals.carbs += item.carbs || 0;
+            totals.fat += item.fat || 0;
+            totals.fiber += item.fiber || 0;
+        });
+    });
+
+    return totals;
+}
+
+function calculateMonthlyStats(logs) {
+    if (logs.length === 0) {
+        return {
+            avgCalories: 0,
+            avgProtein: 0,
+            avgCarbs: 0,
+            avgFat: 0,
+            avgWater: 0,
+            totalDays: 0
+        };
+    }
+
+    const totals = logs.reduce((acc, log) => {
+        acc.calories += log.totals.calories;
+        acc.protein += log.totals.protein;
+        acc.carbs += log.totals.carbs;
+        acc.fat += log.totals.fat;
+        acc.water += log.totals.water;
+        return acc;
+    }, { calories: 0, protein: 0, carbs: 0, fat: 0, water: 0 });
+
+    const dayCount = logs.length;
+
+    return {
+        avgCalories: Math.round(totals.calories / dayCount),
+        avgProtein: Math.round(totals.protein / dayCount),
+        avgCarbs: Math.round(totals.carbs / dayCount),
+        avgFat: Math.round(totals.fat / dayCount),
+        avgWater: Math.round((totals.water / dayCount) * 10) / 10,
+        totalDays: dayCount
+    };
+}
+
+function categorizeFood(name) {
+    const foodName = name.toLowerCase();
+    
+    // Categorization logic based on food name
+    if (foodName.includes('برنج') || foodName.includes('نان') || foodName.includes('غلات')) {
+        return 'grains';
+    } else if (foodName.includes('مرغ') || foodName.includes('گوشت') || foodName.includes('ماهی') || foodName.includes('تخم')) {
+        return 'protein';
+    } else if (foodName.includes('سبزی') || foodName.includes('سالاد') || foodName.includes('خیار') || foodName.includes('گوجه')) {
+        return 'vegetables';
+    } else if (foodName.includes('میوه') || foodName.includes('سیب') || foodName.includes('موز') || foodName.includes('پرتقال')) {
+        return 'fruits';
+    } else if (foodName.includes('شیر') || foodName.includes('ماست') || foodName.includes('پنیر')) {
+        return 'dairy';
+    } else if (foodName.includes('بادام') || foodName.includes('گردو') || foodName.includes('پسته')) {
+        return 'nuts';
+    } else if (foodName.includes('حلوا') || foodName.includes('شیرینی') || foodName.includes('کیک')) {
+        return 'sweets';
+    } else if (foodName.includes('خورشت') || foodName.includes('پلو') || foodName.includes('آبگوشت')) {
+        return 'meals';
+    } else if (foodName.includes('سوپ') || foodName.includes('آش')) {
+        return 'soups';
+    }
+    
+    return 'other';
+}
+
+// ===================== START SERVER =====================
+
+app.listen(PORT, () => {
+    console.log(`🚀 Server is running on port ${PORT}`);
+    console.log(`📊 Complete Persian Food Database loaded with ${completeFoodDatabase.length} items`);
+});
+
+module.exports = app;
