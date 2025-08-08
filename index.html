@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مدیریت کارهای روزانه</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#5D5CDE">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="مدیریت کارها">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' fill='%235D5CDE' rx='40'/%3E%3Cpath d='M45 90L75 120L135 60' stroke='white' stroke-width='8' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
+    
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+    <!-- Header -->
+    <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-gradient-to-r from-purple-600 to-blue-500 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="mr-3">
+                        <h1 class="text-xl font-bold text-gray-900 dark:text-white">مدیریت کارهای روزانه</h1>
+                        <p class="text-sm text-gray-500 dark:text-gray-400" id="current-date"></p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-4 space-x-reverse">
+                    <button id="theme-toggle" class="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+                        <svg class="w-5 h-5 hidden dark:block" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"></path>
+                        </svg>
+                        <svg class="w-5 h-5 block dark:hidden" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="tab-grid" id="navigation-tabs">
+                <button class="tab-button active" data-tab="today">برنامه امروز</button>
+                <button class="tab-button" data-tab="reviews">برنامه مرور</button>
+                <button class="tab-button" data-tab="exams">آزمون‌ها</button>
+                <button class="tab-button" data-tab="archive">آرشیو</button>
+                <button class="tab-button" data-tab="reports">گزارش‌ها</button>
+                <button class="tab-button" data-tab="settings">تنظیمات</button>
+                <button class="tab-button" data-tab="backup">پشتیبان‌گیری</button>
+                <button class="tab-button" data-tab="help">راهنما</button>
+                <button class="tab-button" data-tab="contact">تماس با ما</button>
+                <button class="tab-button" data-tab="about">درباره ما</button>
+                <button class="tab-button" data-tab="profile">پروفایل</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Today's Tasks Tab -->
+        <div id="tab-today" class="tab-content fade-in">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Add New Task -->
+                <div class="lg:col-span-1">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                            <svg class="w-5 h-5 text-purple-600 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                            </svg>
+                            افزودن کار جدید
+                        </h2>
+                        
+                        <form id="add-task-form" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">عنوان کار</label>
+                                <input type="text" id="task-title" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent dark:bg-gray-700 dark:text-white" placeholder="مثال: مطالعه فصل ۲ فیزیک" required>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">تاریخ انجام</label>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">در چه تاریخی می‌خوای این کار رو انجام بدی؟ ما این روز رو به‌عنوان شروع یادگیری در نظر می‌گیریم و مرورها رو برات از همین روز برنامه‌ریزی می‌کنیم.</p>
+                                <div class="grid grid-cols-3 gap-2">
+                                    <input type="number" id="task-day" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent dark:bg-gray-700 dark:text-white text-center" placeholder="روز" min="1" max="31" required>
+                                    <input type="number" id="task-month" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent dark:bg-gray-700 dark:text-white text-center" placeholder="ماه" min="1" max="12" required>
+                                    <input type="number" id="task-year" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent dark:bg-gray-700 dark:text-white text-center" placeholder="سال" min="1400" max="1450" required>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">نوع فعالیت</label>
+                                <select id="task-type" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent dark:bg-gray-700 dark:text-white">
+                                    <option value="مطالعه">مطالعه</option>
+                                    <option value="سایر">سایر</option>
+                                </select>
+                            </div>
+                            
+                            <button type="submit" class="w-full btn-primary text-white font-medium py-2 px-4 rounded-lg">
+                                افزودن کار
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Today's Tasks List -->
+                <div class="lg:col-span-2">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                            <svg class="w-5 h-5 text-blue-600 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                            کارهای امروز
+                        </h2>
+                        <div id="today-tasks-list" class="space-y-3">
+                            <!-- Tasks will be dynamically added here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reviews Tab -->
+        <div id="tab-reviews" class="tab-content hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                    <svg class="w-5 h-5 text-green-600 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    مرورهای امروز
+                </h2>
+                <div id="reviews-list" class="space-y-3">
+                    <!-- Reviews will be dynamically added here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="tab-settings" class="tab-content hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">تنظیمات مرور</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">مرور اول (روز بعد)</label>
+                            <input type="number" id="review1-days" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent dark:bg-gray-700 dark:text-white" min="1" value="1">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">مرور دوم (روز بعد)</label>
+                            <input type="number" id="review2-days" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent dark:bg-gray-700 dark:text-white" min="1" value="3">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">مرور سوم (روز بعد)</label>
+                            <input type="number" id="review3-days" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent dark:bg-gray-700 dark:text-white" min="1" value="7">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">آزمون (روز بعد)</label>
+                            <input type="number" id="exam-days" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-600 focus:border-transparent dark:bg-gray-700 dark:text-white" min="1" value="14">
+                        </div>
+                        <button id="save-settings" class="w-full btn-primary text-white font-medium py-2 px-4 rounded-lg">
+                            ذخیره تنظیمات
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">تنظیمات ظاهری</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">حالت تیره/روشن</label>
+                            <div class="flex items-center">
+                                <input type="checkbox" id="dark-mode-toggle" class="sr-only">
+                                <div class="relative">
+                                    <div class="block bg-gray-600 w-14 h-8 rounded-full"></div>
+                                    <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition"></div>
+                                </div>
+                                <div class="mr-3 text-gray-700 dark:text-gray-300 font-medium">حالت تیره</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Backup Tab -->
+        <div id="tab-backup" class="tab-content hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">پشتیبان‌گیری و بازیابی</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="text-center">
+                        <button id="backup-data" class="btn-primary text-white font-medium py-3 px-6 rounded-lg mb-2">
+                            دانلود پشتیبان
+                        </button>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">دانلود فایل JSON شامل همه داده‌ها</p>
+                    </div>
+                    
+                    <div class="text-center">
+                        <input type="file" id="restore-file" accept=".json" class="hidden">
+                        <button id="restore-data" class="bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-6 rounded-lg mb-2">
+                            بازیابی داده‌ها
+                        </button>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">بارگذاری فایل پشتیبان</p>
+                    </div>
+                    
+                    <div class="text-center">
+                        <button id="clear-data" class="bg-red-600 hover:bg-red-700 text-white font-medium py-3 px-6 rounded-lg mb-2">
+                            پاک کردن همه داده‌ها
+                        </button>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">حذف کامل از حافظه مرورگر</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Other tabs placeholders -->
+        <div id="tab-exams" class="tab-content hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">آزمون‌ها</h2>
+                <p class="text-gray-600 dark:text-gray-400">این بخش در حال توسعه است...</p>
+            </div>
+        </div>
+
+        <div id="tab-archive" class="tab-content hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">آرشیو</h2>
+                <p class="text-gray-600 dark:text-gray-400">این بخش در حال توسعه است...</p>
+            </div>
+        </div>
+
+        <div id="tab-reports" class="tab-content hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">گزارش‌ها</h2>
+                <p class="text-gray-600 dark:text-gray-400">این بخش در حال توسعه است...</p>
+            </div>
+        </div>
+
+        <div id="tab-help" class="tab-content hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">راهنما</h2>
+                <p class="text-gray-600 dark:text-gray-400">این بخش در حال توسعه است...</p>
+            </div>
+        </div>
+
+        <div id="tab-contact" class="tab-content hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">تماس با ما</h2>
+                <p class="text-gray-600 dark:text-gray-400">این بخش در حال توسعه است...</p>
+            </div>
+        </div>
+
+        <div id="tab-about" class="tab-content hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">درباره ما</h2>
+                <p class="text-gray-600 dark:text-gray-400">این بخش در حال توسعه است...</p>
+            </div>
+        </div>
+
+        <div id="tab-profile" class="tab-content hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">پروفایل</h2>
+                <p class="text-gray-600 dark:text-gray-400">این بخش در حال توسعه است...</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Notification Toast -->
+    <div id="notification" class="fixed top-4 left-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform -translate-y-full opacity-0 transition-all duration-300 z-50">
+        <div class="flex items-center">
+            <svg class="w-5 h-5 ml-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+            </svg>
+            <span id="notification-message"></span>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/persian-date.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/components/tabs.js"></script>
+    <script src="js/components/task-manager.js"></script>
+    <script src="js/components/review-system.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
