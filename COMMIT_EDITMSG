@@ -1,0 +1,8 @@
+Enhance the daily task management application with Persian calendar support
+
+This commit introduces a robust Persian calendar integration, including conversion utilities and a `PersianDate` class. It also refactors the application structure with component-based JavaScript classes for Task Management, Review System, and Tab Management, along with styling updates using TailwindCSS and Persian typography. The `.replit` file is configured for running the application, and the `index.html` is updated with PWA meta tags and Persian font links.
+
+Replit-Commit-Author: Agent
+Replit-Commit-Session-Id: 5557cb49-05bf-477b-ae2f-786598138541
+Replit-Commit-Checkpoint-Type: full_checkpoint
+Replit-Commit-Screenshot-Url: https://storage.googleapis.com/screenshot-production-us-central1/5d6f8779-c4eb-4dbe-8c05-2603fe7d87ca/5557cb49-05bf-477b-ae2f-786598138541/UTDejPB
